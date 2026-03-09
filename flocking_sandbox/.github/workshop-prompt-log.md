@@ -108,3 +108,36 @@ The predators need to respawn as well. I would also like to add so that the pred
 
 ### Summary
 Added predator respawn timers and respawn handling independent of prey respawn, with configurable predator respawn delay. Updated prey-hit resolution to attribute kills per predator and track accumulated kills by predator ID. Predators now grow visually based on kill count using configurable growth-per-kill and max-extra-size values, and the rendering pipeline now accepts per-predator size overrides. Verified with lint and production build.
+## Timestamp: 2026-03-09T19:53:05Z
+### User Input
+lets increase the limit of the max size, its a bit small currently. Lets quadruple it
+
+### Agent Reasoning (Brief)
+- The requested change targets the configured upper bound for predator growth size.
+- The max-size limit is exposed through the predator control range in the UI.
+- A quick lint/build pass confirms the settings change doesn’t break the app.
+
+### Summary
+Updated the predator `Max extra size` control upper bound to be four times larger, increasing it from 25 to 100. This gives significantly more headroom for predator growth based on kills without altering core behavior logic. Ran lint and production build, and both passed successfully.
+## Timestamp: 2026-03-09T19:55:09Z
+### User Input
+lets add a small text that follows the predators that shows how many they have killed
+
+### Agent Reasoning (Brief)
+- Predator kill counts are already tracked, so rendering can consume that map directly.
+- The label should be small and offset from predator position so it visually follows movement.
+- Updating the render function signature and call site keeps data flow explicit and type-safe.
+
+### Summary
+Added a small predator kill label in the canvas renderer that follows each predator as it moves. Wired `predatorKillsById` into `drawSimulation` so each predator displays its current kill count beside it. Kept styling subtle with a tiny monospace label and stroke for readability. Verified with lint and production build.
+## Timestamp: 2026-03-09T19:59:11Z
+### User Input
+the predator collision has to grow with the size, you can remove it as a configuration value from the control panel
+
+### Agent Reasoning (Brief)
+- Predator collision should derive from current predator size so growth directly affects hit reach.
+- If collision is derived, the explicit `hitRadius` control becomes redundant and should be removed.
+- Type/config/UI and hit-resolution logic must be updated together to keep behavior consistent.
+
+### Summary
+Removed `hitRadius` from predator config types/defaults and from the predator controls panel. Updated prey-hit resolution to use each predator’s current size-derived collision radius plus a small buffer, so collision grows naturally with predator growth. Added a reusable per-frame predator-size map in the app loop and used it both for collision checks and rendering. Verified the result with lint and production build.

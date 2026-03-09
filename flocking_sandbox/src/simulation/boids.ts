@@ -514,19 +514,22 @@ export const resolvePredatorsHitByDefender = (
 export const resolvePredatorHits = (
   preyBoids: Boid[],
   predators: Boid[],
-  hitRadius: number,
+  predatorCollisionRadiusById: Map<number, number>,
 ): { survivors: Boid[]; hits: number; killsByPredator: Map<number, number> } => {
+  const PREY_COLLISION_BUFFER = 3
   let hits = 0
   const killsByPredator = new Map<number, number>()
 
   const survivors = preyBoids.filter((prey) => {
     let killerId: number | null = null
-    let nearestDistance = hitRadius
+    let nearestDistance = Number.POSITIVE_INFINITY
 
     for (const predator of predators) {
       const distance = magnitude(subtract(prey.position, predator.position))
+      const predatorRadius = predatorCollisionRadiusById.get(predator.id) ?? 9
+      const hitRadius = predatorRadius + PREY_COLLISION_BUFFER
 
-      if (distance <= nearestDistance) {
+      if (distance <= hitRadius && distance <= nearestDistance) {
         nearestDistance = distance
         killerId = predator.id
       }

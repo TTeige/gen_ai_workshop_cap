@@ -65,6 +65,26 @@ const drawDefenderHull = (context: CanvasRenderingContext2D, points: Vector2[]):
   context.restore()
 }
 
+const drawPredatorKillLabel = (
+  context: CanvasRenderingContext2D,
+  predator: Boid,
+  predatorSize: number,
+  kills: number,
+): void => {
+  const label = `${kills}`
+
+  context.save()
+  context.font = '10px ui-monospace, SFMono-Regular, Menlo, monospace'
+  context.textAlign = 'left'
+  context.textBaseline = 'middle'
+  context.lineWidth = 3
+  context.strokeStyle = 'rgba(2, 6, 23, 0.85)'
+  context.fillStyle = 'rgba(248, 250, 252, 0.9)'
+  context.strokeText(label, predator.position.x + predatorSize + 3, predator.position.y - predatorSize - 1)
+  context.fillText(label, predator.position.x + predatorSize + 3, predator.position.y - predatorSize - 1)
+  context.restore()
+}
+
 export const drawSimulation = (
   context: CanvasRenderingContext2D,
   preyBoids: Boid[],
@@ -72,6 +92,7 @@ export const drawSimulation = (
   defender: DefenderEntity | null,
   defenderHull: Vector2[],
   predatorSizeById: Map<number, number>,
+  predatorKillsById: Map<number, number>,
   width: number,
   height: number,
 ): void => {
@@ -103,6 +124,8 @@ export const drawSimulation = (
 
   for (const predator of predatorBoids) {
     const predatorSize = predatorSizeById.get(predator.id) ?? PREDATOR_SIZE
+    const kills = predatorKillsById.get(predator.id) ?? 0
     drawAgent(context, predator, predatorSize, '#fb7185')
+    drawPredatorKillLabel(context, predator, predatorSize, kills)
   }
 }

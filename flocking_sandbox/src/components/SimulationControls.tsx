@@ -51,10 +51,9 @@ const predatorControls: PredatorControl[] = [
   { key: 'maxSpeed', label: 'Max speed', min: 80, max: 380, step: 5 },
   { key: 'maxForce', label: 'Max force', min: 5, max: 80, step: 1 },
   { key: 'detectionRadius', label: 'Chase radius', min: 60, max: 520, step: 10 },
-  { key: 'hitRadius', label: 'Hit radius', min: 4, max: 40, step: 1 },
   { key: 'respawnDelayMs', label: 'Respawn delay (ms)', min: 300, max: 6000, step: 100 },
   { key: 'growthPerKill', label: 'Growth per kill', min: 0, max: 2, step: 0.05 },
-  { key: 'maxExtraSize', label: 'Max extra size', min: 0, max: 25, step: 1 },
+  { key: 'maxExtraSize', label: 'Max extra size', min: 0, max: 100, step: 1 },
 ]
 
 const defenderControls: DefenderControl[] = [

@@ -184,6 +184,20 @@ function App() {
 
     const tick = (time: number) => {
       const currentConfig = configRef.current
+      const getPredatorSizeById = () => {
+        const sizeById = new Map<number, number>()
+
+        for (const predator of predatorBoids) {
+          const kills = predatorKillsById.get(predator.id) ?? 0
+          const extraSize = Math.min(
+            currentConfig.predators.maxExtraSize,
+            kills * currentConfig.predators.growthPerKill,
+          )
+          sizeById.set(predator.id, 9 + extraSize)
+        }
+
+        return sizeById
+      }
 
       if (shouldResetRef.current) {
         resetPopulation(currentConfig)
@@ -276,7 +290,8 @@ function App() {
           }
         }
 
-        const hitResult = resolvePredatorHits(preyBoids, predatorBoids, currentConfig.predators.hitRadius)
+        const predatorSizeByIdForCollision = getPredatorSizeById()
+        const hitResult = resolvePredatorHits(preyBoids, predatorBoids, predatorSizeByIdForCollision)
         preyBoids = hitResult.survivors
 
         for (const [predatorId, kills] of hitResult.killsByPredator.entries()) {
@@ -346,12 +361,7 @@ function App() {
       }
 
       const defenderHull = defender ? getDefenderWorldHull(defender) : []
-      const predatorSizeById = new Map<number, number>()
-      for (const predator of predatorBoids) {
-        const kills = predatorKillsById.get(predator.id) ?? 0
-        const extraSize = Math.min(currentConfig.predators.maxExtraSize, kills * currentConfig.predators.growthPerKill)
-        predatorSizeById.set(predator.id, 9 + extraSize)
-      }
+      const predatorSizeById = getPredatorSizeById()
 
       drawSimulation(
         context,
@@ -360,6 +370,7 @@ function App() {
         defender,
         defenderHull,
         predatorSizeById,
+        predatorKillsById,
         width,
         height,
       )

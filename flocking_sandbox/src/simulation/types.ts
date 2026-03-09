@@ -36,7 +36,6 @@ export type PredatorConfig = {
   maxSpeed: number
   maxForce: number
   detectionRadius: number
-  hitRadius: number
   respawnDelayMs: number
   growthPerKill: number
   maxExtraSize: number

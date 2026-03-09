@@ -19,7 +19,6 @@ export const DEFAULT_SIMULATION_CONFIG: SimulationConfig = {
     maxSpeed: 220,
     maxForce: 28,
     detectionRadius: 260,
-    hitRadius: 12,
     respawnDelayMs: 2200,
     growthPerKill: 0.45,
     maxExtraSize: 10,
