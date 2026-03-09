@@ -3,15 +3,26 @@ import { SimulationControls } from './components/SimulationControls'
 import './App.css'
 import {
   createBoids,
-  reconcileBoidCount,
+  formDefenderEntity,
+  getDefenderWorldHull,
   resolvePredatorHits,
+  resolvePredatorsHitByDefender,
+  splitDefenderEntity,
+  updateDefenderEntity,
   updatePredatorBoids,
   updatePreyBoids,
   wrapBoids,
+  wrapDefenderEntity,
 } from './simulation/boids'
 import { DEFAULT_SIMULATION_CONFIG } from './simulation/config'
 import { drawSimulation, resizeCanvas } from './simulation/render'
-import type { Boid, SimulationConfig } from './simulation/types'
+import type { Boid, DefenderEntity, SimulationConfig, Vector2 } from './simulation/types'
+import { magnitude, normalize, randomUnitVector } from './simulation/vector'
+
+type ScatterEffect = {
+  direction: Vector2
+  remainingMs: number
+}
 
 function App() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -52,7 +63,13 @@ function App() {
 
     let preyBoids: Boid[] = []
     let predatorBoids: Boid[] = []
+    let defender: DefenderEntity | null = null
     let respawnTimersMs: number[] = []
+    let predatorRespawnTimersMs: number[] = []
+    let predatorKillsById = new Map<number, number>()
+    let splitScatterEffects = new Map<number, ScatterEffect>()
+    let defenderActiveMs = 0
+    let reformationCooldownMs = 0
     let width = 0
     let height = 0
     let frameId = 0
@@ -66,11 +83,21 @@ function App() {
         height,
         currentConfig.predators.maxSpeed,
       )
+      defender = null
       respawnTimersMs = []
+      predatorRespawnTimersMs = []
+      splitScatterEffects = new Map<number, ScatterEffect>()
+      predatorKillsById = new Map<number, number>()
+      for (const predator of predatorBoids) {
+        predatorKillsById.set(predator.id, 0)
+      }
+      defenderActiveMs = 0
+      reformationCooldownMs = 0
     }
 
     const reconcilePreyPopulation = (currentConfig: SimulationConfig) => {
-      let diff = preyBoids.length + respawnTimersMs.length - currentConfig.boids.count
+      const defenderMemberCount = defender ? defender.memberOffsets.length : 0
+      let diff = preyBoids.length + respawnTimersMs.length + defenderMemberCount - currentConfig.boids.count
 
       if (diff > 0) {
         const removeFromQueue = Math.min(diff, respawnTimersMs.length)
@@ -90,16 +117,68 @@ function App() {
       }
     }
 
+    const reconcilePredatorPopulation = (currentConfig: SimulationConfig) => {
+      let diff = predatorBoids.length + predatorRespawnTimersMs.length - currentConfig.predators.count
+
+      if (diff > 0) {
+        const removeFromQueue = Math.min(diff, predatorRespawnTimersMs.length)
+        predatorRespawnTimersMs = predatorRespawnTimersMs.slice(
+          0,
+          predatorRespawnTimersMs.length - removeFromQueue,
+        )
+        diff -= removeFromQueue
+
+        if (diff > 0) {
+          predatorBoids = predatorBoids.slice(0, Math.max(0, predatorBoids.length - diff))
+          const aliveIds = new Set(predatorBoids.map((predator) => predator.id))
+          for (const predatorId of predatorKillsById.keys()) {
+            if (!aliveIds.has(predatorId)) {
+              predatorKillsById.delete(predatorId)
+            }
+          }
+        }
+      }
+
+      if (diff < 0) {
+        const spawned = createBoids(
+          Math.abs(diff),
+          width,
+          height,
+          currentConfig.predators.maxSpeed,
+        )
+        predatorBoids = [...predatorBoids, ...spawned]
+        for (const predator of spawned) {
+          predatorKillsById.set(predator.id, 0)
+        }
+      }
+    }
+
+    const updateScatterTimers = (deltaMs: number) => {
+      if (splitScatterEffects.size === 0) {
+        return
+      }
+
+      for (const [boidId, effect] of splitScatterEffects.entries()) {
+        const next = effect.remainingMs - deltaMs
+        if (next <= 0) {
+          splitScatterEffects.delete(boidId)
+        } else {
+          splitScatterEffects.set(boidId, { ...effect, remainingMs: next })
+        }
+      }
+    }
+
     const applyResize = () => {
       const resized = resizeCanvas(canvas, context)
       width = resized.width
       height = resized.height
 
-      if (preyBoids.length === 0 && predatorBoids.length === 0) {
+      if (preyBoids.length === 0 && predatorBoids.length === 0 && !defender) {
         resetPopulation(configRef.current)
       } else {
         preyBoids = wrapBoids(preyBoids, width, height)
         predatorBoids = wrapBoids(predatorBoids, width, height)
+        defender = wrapDefenderEntity(defender, width, height)
       }
     }
 
@@ -112,31 +191,106 @@ function App() {
       }
 
       reconcilePreyPopulation(currentConfig)
-      predatorBoids = reconcileBoidCount(
-        predatorBoids,
-        currentConfig.predators.count,
-        width,
-        height,
-        currentConfig.predators.maxSpeed,
-      )
+      reconcilePredatorPopulation(currentConfig)
 
       const deltaSeconds = isRunningRef.current ? Math.min((time - lastTime) / 1000, 0.033) : 0
       const deltaMs = deltaSeconds * 1000
       lastTime = time
 
       if (isRunningRef.current) {
-        preyBoids = updatePreyBoids(preyBoids, predatorBoids, width, height, deltaSeconds, currentConfig)
-        predatorBoids = updatePredatorBoids(
-          predatorBoids,
+        if (reformationCooldownMs > 0) {
+          reformationCooldownMs = Math.max(0, reformationCooldownMs - deltaMs)
+        }
+
+        updateScatterTimers(deltaMs)
+
+        if (!defender && reformationCooldownMs === 0) {
+          const formation = formDefenderEntity(preyBoids, currentConfig)
+          if (formation.defender) {
+            preyBoids = formation.remainingPrey
+            defender = formation.defender
+            defenderActiveMs = currentConfig.defenders.activeDurationMs
+          }
+        }
+
+        const scatterDirections = new Map<number, Vector2>()
+        for (const [boidId, effect] of splitScatterEffects.entries()) {
+          scatterDirections.set(boidId, effect.direction)
+        }
+
+        preyBoids = updatePreyBoids(
           preyBoids,
+          predatorBoids,
+          scatterDirections,
           width,
           height,
           deltaSeconds,
           currentConfig,
         )
 
+        predatorBoids = updatePredatorBoids(
+          predatorBoids,
+          preyBoids,
+          defender,
+          width,
+          height,
+          deltaSeconds,
+          currentConfig,
+        )
+
+        if (defender) {
+          defender = updateDefenderEntity(defender, predatorBoids, width, height, deltaSeconds, currentConfig)
+
+          const previousPredators = predatorBoids
+          const defenderHitResult = resolvePredatorsHitByDefender(predatorBoids, defender)
+          predatorBoids = defenderHitResult.survivors
+
+          if (defenderHitResult.hits > 0) {
+            const survivorIds = new Set(defenderHitResult.survivors.map((predator) => predator.id))
+            for (const predator of previousPredators) {
+              if (!survivorIds.has(predator.id)) {
+                predatorKillsById.delete(predator.id)
+                predatorRespawnTimersMs.push(currentConfig.predators.respawnDelayMs)
+              }
+            }
+          }
+
+          defenderActiveMs = Math.max(0, defenderActiveMs - deltaMs)
+
+          if (defenderActiveMs === 0) {
+            const splitBoids = wrapBoids(splitDefenderEntity(defender, currentConfig), width, height)
+
+            for (const splitBoid of splitBoids) {
+              const direction =
+                magnitude(splitBoid.velocity) === 0 ? randomUnitVector() : normalize(splitBoid.velocity)
+
+              splitScatterEffects.set(splitBoid.id, {
+                direction,
+                remainingMs: currentConfig.defenders.splitScatterDurationMs,
+              })
+            }
+
+            preyBoids = [...preyBoids, ...splitBoids]
+            defender = null
+            reformationCooldownMs = currentConfig.defenders.reformationCooldownMs
+          }
+        }
+
         const hitResult = resolvePredatorHits(preyBoids, predatorBoids, currentConfig.predators.hitRadius)
         preyBoids = hitResult.survivors
+
+        for (const [predatorId, kills] of hitResult.killsByPredator.entries()) {
+          predatorKillsById.set(predatorId, (predatorKillsById.get(predatorId) ?? 0) + kills)
+        }
+
+        if (splitScatterEffects.size > 0) {
+          const survivorIds = new Set(preyBoids.map((boid) => boid.id))
+          for (const boidId of splitScatterEffects.keys()) {
+            if (!survivorIds.has(boidId)) {
+              splitScatterEffects.delete(boidId)
+            }
+          }
+        }
 
         for (let index = 0; index < hitResult.hits; index += 1) {
           respawnTimersMs.push(currentConfig.respawnDelayMs)
@@ -162,9 +316,53 @@ function App() {
             ]
           }
         }
+
+        if (predatorRespawnTimersMs.length) {
+          let readyToRespawn = 0
+          predatorRespawnTimersMs = predatorRespawnTimersMs
+            .map((timer) => timer - deltaMs)
+            .filter((timer) => {
+              if (timer <= 0) {
+                readyToRespawn += 1
+                return false
+              }
+
+              return true
+            })
+
+          if (readyToRespawn > 0) {
+            const respawnedPredators = createBoids(
+              readyToRespawn,
+              width,
+              height,
+              currentConfig.predators.maxSpeed,
+            )
+            predatorBoids = [...predatorBoids, ...respawnedPredators]
+            for (const predator of respawnedPredators) {
+              predatorKillsById.set(predator.id, 0)
+            }
+          }
+        }
       }
 
-      drawSimulation(context, preyBoids, predatorBoids, width, height)
+      const defenderHull = defender ? getDefenderWorldHull(defender) : []
+      const predatorSizeById = new Map<number, number>()
+      for (const predator of predatorBoids) {
+        const kills = predatorKillsById.get(predator.id) ?? 0
+        const extraSize = Math.min(currentConfig.predators.maxExtraSize, kills * currentConfig.predators.growthPerKill)
+        predatorSizeById.set(predator.id, 9 + extraSize)
+      }
+
+      drawSimulation(
+        context,
+        preyBoids,
+        predatorBoids,
+        defender,
+        defenderHull,
+        predatorSizeById,
+        width,
+        height,
+      )
       frameId = window.requestAnimationFrame(tick)
     }
 

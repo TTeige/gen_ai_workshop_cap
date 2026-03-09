@@ -53,3 +53,58 @@ Lets split the predator config and the boid config. Also, lets make them collaps
 
 ### Summary
 Refactored the simulation config into separate `boids` and `predators` sections plus a top-level respawn delay value. Updated simulation logic and app orchestration to use the new nested config fields end-to-end. Reworked controls into collapsible `Boid Config` and `Predator Config` sections (using `details/summary`) while preserving live tuning. Verified everything with lint and production build.
+## Timestamp: 2026-03-09T19:23:49Z
+### User Input
+If a threshold of critical mass of normal boids align, they should create a new type of boid that can chase the predators. After a given time, they should split again and scatter for a short time after splitting
+
+### Agent Reasoning (Brief)
+- This behavior needs a third temporary boid population formed from existing prey, not just a separate always-on species.
+- Formation and split timing are stateful, so the simulation loop must track active duration, cooldown, and per-boid split-scatter effects.
+- Unique boid IDs are required to apply short-lived scatter behavior specifically to split boids.
+
+### Summary
+Added defender boids that form when a critical mass of aligned normal boids is detected within a formation radius and alignment threshold. Defenders chase predators for a configured active duration, then split back into normal boids and receive temporary scatter steering after splitting. Updated simulation types/config, rendering, and controls (including a collapsible defender section) to support tuning these mechanics. Verified the implementation with lint and production build.
+## Timestamp: 2026-03-09T19:33:10Z
+### User Input
+The defenders need to be able to eliminate the predators. Also, they should not be governed by the same rules as normal boids when they have become defenders. They should become a single new boid, with regards to the sim rules. It could help to draw a new shape around them, and if the predators are hit by this shape they are eliminated. I guess something like a convex hull might be a good solution, but I leave that to you
+
+### Agent Reasoning (Brief)
+- Defenders should be modeled as a single entity with its own steering logic rather than as multiple boids following flock rules.
+- A hull-based collision area around that entity enables robust predator elimination on contact.
+- Predator elimination must persist, so predator auto-replenishment should only occur on explicit config changes/reset.
+
+### Summary
+Refactored defenders into a single `DefenderEntity` formed from aligned boids, with convex-hull generation around member offsets and dedicated defender movement/chase behavior. Added hull rendering and predator elimination when predators enter the defender hull area. Updated split behavior to convert the single entity back into normal boids with short scatter effects, and adjusted predator population handling so kills persist unless the configured predator count is changed. Verified with lint and production build.
+## Timestamp: 2026-03-09T19:41:05Z
+### User Input
+The app file has a lot of missing methods imported from boids
+
+### Agent Reasoning (Brief)
+- This report indicates a potential interface mismatch between `App.tsx` imports and `boids.ts` exports.
+- The immediate check is a lint/build pass and symbol verification before making behavioral changes.
+- Even though the turn was interrupted, logging still needs to record that instruction.
+
+### Summary
+Captured and assessed the reported import mismatch concern. No standalone code changes were finalized for this interrupted instruction before the follow-up request arrived. Continued with the next instruction and validated the project with lint/build during that work.
+## Timestamp: 2026-03-09T19:41:05Z
+### User Input
+The predators should flee from the defenders. Also the defender rendering is a bit glaring, we should lower the opacity and keep the boid inside the defender entity rendered so that it is clear that the hull acts as a "shield" of sorts
+
+### Agent Reasoning (Brief)
+- Predator steering needs to blend prey-chase behavior with defender-avoidance so predators retreat near defender hulls.
+- Defender visuals should reduce fill intensity and explicitly show member boids inside the hull for clarity.
+- The changes must preserve the single-entity defender model and remain build-safe.
+
+### Summary
+Updated predator behavior to flee when near or inside defender hull influence, while still allowing chase behavior outside danger range. Softened defender hull rendering opacity and stroke intensity and rendered defender member boids inside the hull to communicate the shield concept. Wired the updated predator steering call path through `App.tsx` and verified with lint and production build.
+## Timestamp: 2026-03-09T19:47:12Z
+### User Input
+The predators need to respawn as well. I would also like to add so that the predator grows based on the number of boids killed.
+
+### Agent Reasoning (Brief)
+- Predator lifecycle now needs its own respawn queue so predator deaths are temporary rather than permanent.
+- Predator growth requires kill attribution from prey-hit resolution back to specific predator IDs.
+- Rendering should consume per-predator size values derived from kill counts and configurable growth limits.
+
+### Summary
+Added predator respawn timers and respawn handling independent of prey respawn, with configurable predator respawn delay. Updated prey-hit resolution to attribute kills per predator and track accumulated kills by predator ID. Predators now grow visually based on kill count using configurable growth-per-kill and max-extra-size values, and the rendering pipeline now accepts per-predator size overrides. Verified with lint and production build.

@@ -1,4 +1,4 @@
-import type { BoidConfig, PredatorConfig, SimulationConfig } from '../simulation/types'
+import type { BoidConfig, DefenderConfig, PredatorConfig, SimulationConfig } from '../simulation/types'
 
 type BoidControl = {
   key: keyof BoidConfig
@@ -10,6 +10,14 @@ type BoidControl = {
 
 type PredatorControl = {
   key: keyof PredatorConfig
+  label: string
+  min: number
+  max: number
+  step: number
+}
+
+type DefenderControl = {
+  key: keyof DefenderConfig
   label: string
   min: number
   max: number
@@ -44,11 +52,36 @@ const predatorControls: PredatorControl[] = [
   { key: 'maxForce', label: 'Max force', min: 5, max: 80, step: 1 },
   { key: 'detectionRadius', label: 'Chase radius', min: 60, max: 520, step: 10 },
   { key: 'hitRadius', label: 'Hit radius', min: 4, max: 40, step: 1 },
+  { key: 'respawnDelayMs', label: 'Respawn delay (ms)', min: 300, max: 6000, step: 100 },
+  { key: 'growthPerKill', label: 'Growth per kill', min: 0, max: 2, step: 0.05 },
+  { key: 'maxExtraSize', label: 'Max extra size', min: 0, max: 25, step: 1 },
+]
+
+const defenderControls: DefenderControl[] = [
+  { key: 'formationCriticalMass', label: 'Critical mass', min: 3, max: 40, step: 1 },
+  { key: 'formationRadius', label: 'Formation radius', min: 30, max: 260, step: 5 },
+  { key: 'formationAlignmentThreshold', label: 'Alignment threshold', min: 0.5, max: 0.99, step: 0.01 },
+  { key: 'maxSpeed', label: 'Max speed', min: 80, max: 360, step: 5 },
+  { key: 'maxForce', label: 'Max force', min: 5, max: 90, step: 1 },
+  { key: 'detectionRadius', label: 'Chase radius', min: 60, max: 520, step: 10 },
+  { key: 'hullPadding', label: 'Hull padding', min: 0, max: 60, step: 1 },
+  { key: 'activeDurationMs', label: 'Active duration (ms)', min: 500, max: 12000, step: 100 },
+  { key: 'splitScatterDurationMs', label: 'Split scatter duration (ms)', min: 200, max: 6000, step: 100 },
+  { key: 'splitScatterWeight', label: 'Split scatter weight', min: 0, max: 6, step: 0.1 },
+  { key: 'reformationCooldownMs', label: 'Re-form cooldown (ms)', min: 0, max: 8000, step: 100 },
 ]
 
 const formatValue = (value: number, step: number): string => {
   if (step >= 1) {
     return String(Math.round(value))
+  }
+
+  if (step === 0.01) {
+    return value.toFixed(2)
+  }
+
+  if (step === 0.05) {
+    return value.toFixed(2)
   }
 
   return value.toFixed(1)
@@ -76,6 +109,16 @@ export function SimulationControls({
       ...config,
       predators: {
         ...config.predators,
+        [key]: step >= 1 ? Math.round(value) : value,
+      },
+    })
+  }
+
+  const updateDefenderConfig = (key: keyof DefenderConfig, value: number, step: number) => {
+    onConfigChange({
+      ...config,
+      defenders: {
+        ...config.defenders,
         [key]: step >= 1 ? Math.round(value) : value,
       },
     })
@@ -151,7 +194,7 @@ export function SimulationControls({
           })}
 
           <label className="controls__row" key="respawnDelayMs">
-            <span>Respawn delay (ms)</span>
+            <span>Prey respawn delay (ms)</span>
             <span className="controls__value">{formatValue(config.respawnDelayMs, 100)}</span>
             <input
               type="range"
@@ -162,6 +205,31 @@ export function SimulationControls({
               onChange={(event) => updateRespawnDelay(Number(event.target.value))}
             />
           </label>
+        </div>
+      </details>
+
+      <details className="controls__section" open>
+        <summary className="controls__section-summary">Defender Config</summary>
+        <div className="controls__list">
+          {defenderControls.map((control) => {
+            const value = config.defenders[control.key]
+            return (
+              <label className="controls__row" key={control.key}>
+                <span>{control.label}</span>
+                <span className="controls__value">{formatValue(value, control.step)}</span>
+                <input
+                  type="range"
+                  min={control.min}
+                  max={control.max}
+                  step={control.step}
+                  value={value}
+                  onChange={(event) =>
+                    updateDefenderConfig(control.key, Number(event.target.value), control.step)
+                  }
+                />
+              </label>
+            )
+          })}
         </div>
       </details>
     </aside>

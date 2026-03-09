@@ -4,8 +4,17 @@ export type Vector2 = {
 }
 
 export type Boid = {
+  id: number
   position: Vector2
   velocity: Vector2
+}
+
+export type DefenderEntity = {
+  id: number
+  position: Vector2
+  velocity: Vector2
+  memberOffsets: Array<{ id: number; offset: Vector2 }>
+  hullLocalPoints: Vector2[]
 }
 
 export type BoidConfig = {
@@ -28,10 +37,28 @@ export type PredatorConfig = {
   maxForce: number
   detectionRadius: number
   hitRadius: number
+  respawnDelayMs: number
+  growthPerKill: number
+  maxExtraSize: number
+}
+
+export type DefenderConfig = {
+  formationCriticalMass: number
+  formationRadius: number
+  formationAlignmentThreshold: number
+  maxSpeed: number
+  maxForce: number
+  detectionRadius: number
+  hullPadding: number
+  activeDurationMs: number
+  splitScatterDurationMs: number
+  splitScatterWeight: number
+  reformationCooldownMs: number
 }
 
 export type SimulationConfig = {
   boids: BoidConfig
   predators: PredatorConfig
+  defenders: DefenderConfig
   respawnDelayMs: number
 }
